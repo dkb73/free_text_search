@@ -1,21 +1,46 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import google.generativeai as genai
 import faiss
 import numpy as np
 from pymongo import MongoClient
 from bson import ObjectId
-import config  
+import os
+from dotenv import load_dotenv
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
+# Configure CORS to allow requests from frontend
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://localhost:3000", "https://your-app.vercel.app"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
 
 # Configure Gemini API
+GEMINI_API_KEY = str(os.getenv('GEMINI_API_KEY', '')).strip()
+if not GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY not found in environment variables")
+    raise ValueError("GEMINI_API_KEY is required")
+
 try:
-    genai.configure(api_key=config.GEMINI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY)
+    logger.info("Gemini API configured successfully")
 except Exception as e:
-    print(f"Error configuring Gemini API: {e}")
+    logger.error(f"Error configuring Gemini API: {e}")
+    raise
 
 # Connect to MongoDB
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient(os.getenv('MONGODB_URI', "mongodb://localhost:27017/"))
 db = client["hostelDB"]
 hostel_collection = db["hostels"]
 
@@ -23,32 +48,33 @@ hostel_collection = db["hostels"]
 try:
     index = faiss.read_index("hostel_index.faiss")
     hostel_ids = np.load("hostel_ids.npy")
+    logger.info("FAISS index and hostel IDs loaded successfully")
 except Exception as e:
-    print(f"Error loading FAISS index or hostel IDs: {e}")
+    logger.error(f"Error loading FAISS index or hostel IDs: {e}")
     index = None
     hostel_ids = None
 
 # Function to generate embeddings
 def get_embedding(text):
     try:
+        logger.info(f"Generating embedding for query: {text}")
         response = genai.embed_content(
             model="models/embedding-001",
             content=text,
             task_type="retrieval_document"
         )
-        return np.array(response["embedding"], dtype="float32")
+        embedding = np.array(response["embedding"], dtype="float32")
+        logger.info("Embedding generated successfully")
+        return embedding
     except Exception as e:
-        print(f"Error generating embedding: {e}")
+        logger.error(f"Error generating embedding: {e}")
         return None
 
-@app.route("/")
-def home():
-    return render_template("index.html")  # Serve the frontend page
-
-@app.route("/search", methods=["POST"])
+@app.route("/api/search", methods=["POST"])
 def search():
     if not index or hostel_ids is None:
-        return jsonify({"error": "FAISS index not available"}), 500
+        logger.error("FAISS index not available")
+        return jsonify({"error": "Search system not properly initialized"}), 500
 
     data = request.json
     query = data.get("query", "").strip()
@@ -59,7 +85,7 @@ def search():
     # Get embedding for query
     query_embedding = get_embedding(query)
     if query_embedding is None:
-        return jsonify({"error": "Failed to generate query embedding"}), 500
+        return jsonify({"error": "Failed to generate query embedding. Please try again."}), 500
 
     query_embedding = query_embedding.reshape(1, -1)
 
@@ -93,4 +119,4 @@ def search():
     return jsonify(results)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True) 
