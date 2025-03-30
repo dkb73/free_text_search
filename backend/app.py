@@ -53,30 +53,37 @@ def load_index_files():
     try:
         # Get the absolute path to the current directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        index_path = os.path.join(current_dir, "hostel_index.faiss")
-        ids_path = os.path.join(current_dir, "hostel_ids.npy")
         
-        logger.info(f"Attempting to load index from: {index_path}")
-        logger.info(f"Attempting to load IDs from: {ids_path}")
+        # Define possible locations for the files
+        possible_locations = [
+            current_dir,  # Current directory
+            os.path.join(current_dir, 'data'),  # data subdirectory
+            '/opt/render/project/src/data',  # Render's data directory
+        ]
         
-        if not os.path.exists(index_path):
-            logger.error(f"Index file not found at: {index_path}")
-            return False
+        # Try each location until we find the files
+        for location in possible_locations:
+            index_path = os.path.join(location, "hostel_index.faiss")
+            ids_path = os.path.join(location, "hostel_ids.npy")
             
-        if not os.path.exists(ids_path):
-            logger.error(f"IDs file not found at: {ids_path}")
-            return False
+            logger.info(f"Attempting to load files from: {location}")
             
-        index = faiss.read_index(index_path)
-        hostel_ids = np.load(ids_path)
-        logger.info("FAISS index and hostel IDs loaded successfully")
-        return True
+            if os.path.exists(index_path) and os.path.exists(ids_path):
+                logger.info(f"Found files in: {location}")
+                index = faiss.read_index(index_path)
+                hostel_ids = np.load(ids_path)
+                logger.info("FAISS index and hostel IDs loaded successfully")
+                return True
+                
+        logger.error("Could not find index files in any of the expected locations")
+        return False
     except Exception as e:
         logger.error(f"Error loading FAISS index or hostel IDs: {e}")
         return False
 
 # Load the index files
-load_index_files()
+if not load_index_files():
+    logger.error("Failed to load index files. The search system will not be available.")
 
 # Function to generate embeddings
 def get_embedding(text):
