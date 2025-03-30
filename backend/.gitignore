@@ -36,4 +36,8 @@ ENV/
 
 # Allow our data files
 !hostel_index.faiss
-!hostel_ids.npy 
+!hostel_ids.npy
+
+# Additional files to exclude
+*.log
+.DS_Store 

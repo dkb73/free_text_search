@@ -1,5 +1,9 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import Optional, List
 import google.generativeai as genai
 import faiss
 import numpy as np
@@ -8,6 +12,9 @@ from bson import ObjectId
 import os
 from dotenv import load_dotenv
 import logging
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -16,15 +23,17 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
-# Configure CORS to allow requests from frontend
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["http://localhost:3000", "https://your-app.vercel.app"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type"]
-    }
-})
+# Initialize FastAPI app
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Configure Gemini API
 GEMINI_API_KEY = str(os.getenv('GEMINI_API_KEY', '')).strip()
@@ -57,9 +66,8 @@ def load_index_files():
         
         # Define possible locations for the files
         possible_locations = [
-            '/data',  # Persistent disk location
-            current_dir,  # Current directory
-            os.path.join(current_dir, 'data'),  # data subdirectory
+            os.path.join(current_dir, 'data'),  # data subdirectory (primary location)
+            current_dir,  # Current directory (fallback)
         ]
         
         # Log all possible locations
@@ -121,22 +129,23 @@ def get_embedding(text):
         logger.error(f"Error generating embedding: {e}")
         return None
 
-@app.route("/api/search", methods=["POST"])
-def search():
+class SearchQuery(BaseModel):
+    query: str
+
+@app.post("/api/search")
+async def search(search_query: SearchQuery):
     if not index or hostel_ids is None:
         logger.error("FAISS index not available")
-        return jsonify({"error": "Search system not properly initialized. Please check server logs."}), 500
+        raise HTTPException(status_code=500, detail="Search system not properly initialized. Please check server logs.")
 
-    data = request.json
-    query = data.get("query", "").strip()
-
+    query = search_query.query.strip()
     if not query:
-        return jsonify({"error": "Query cannot be empty"}), 400
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
 
     # Get embedding for query
     query_embedding = get_embedding(query)
     if query_embedding is None:
-        return jsonify({"error": "Failed to generate query embedding. Please try again."}), 500
+        raise HTTPException(status_code=500, detail="Failed to generate query embedding. Please try again.")
 
     query_embedding = query_embedding.reshape(1, -1)
 
@@ -145,7 +154,7 @@ def search():
 
     # Handle case where no results are found
     if I[0][0] == -1:
-        return jsonify({"message": "No matching hostels found"}), 200
+        return {"message": "No matching hostels found"}
 
     # Retrieve hostel details from MongoDB
     results = []
@@ -167,7 +176,11 @@ def search():
                     "contact": hostel.get("contact", {}).get("phone", "Not provided")
                 })
 
-    return jsonify(results)
+    return results
+
+@app.get("/")
+async def health_check():
+    return {"status": "healthy", "message": "API is running"}
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True) 
