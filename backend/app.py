@@ -45,14 +45,38 @@ db = client["hostelDB"]
 hostel_collection = db["hostels"]
 
 # Load FAISS index and hostel IDs
-try:
-    index = faiss.read_index("hostel_index.faiss")
-    hostel_ids = np.load("hostel_ids.npy")
-    logger.info("FAISS index and hostel IDs loaded successfully")
-except Exception as e:
-    logger.error(f"Error loading FAISS index or hostel IDs: {e}")
-    index = None
-    hostel_ids = None
+index = None
+hostel_ids = None
+
+def load_index_files():
+    global index, hostel_ids
+    try:
+        # Get the absolute path to the current directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        index_path = os.path.join(current_dir, "hostel_index.faiss")
+        ids_path = os.path.join(current_dir, "hostel_ids.npy")
+        
+        logger.info(f"Attempting to load index from: {index_path}")
+        logger.info(f"Attempting to load IDs from: {ids_path}")
+        
+        if not os.path.exists(index_path):
+            logger.error(f"Index file not found at: {index_path}")
+            return False
+            
+        if not os.path.exists(ids_path):
+            logger.error(f"IDs file not found at: {ids_path}")
+            return False
+            
+        index = faiss.read_index(index_path)
+        hostel_ids = np.load(ids_path)
+        logger.info("FAISS index and hostel IDs loaded successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Error loading FAISS index or hostel IDs: {e}")
+        return False
+
+# Load the index files
+load_index_files()
 
 # Function to generate embeddings
 def get_embedding(text):
@@ -74,7 +98,7 @@ def get_embedding(text):
 def search():
     if not index or hostel_ids is None:
         logger.error("FAISS index not available")
-        return jsonify({"error": "Search system not properly initialized"}), 500
+        return jsonify({"error": "Search system not properly initialized. Please check server logs."}), 500
 
     data = request.json
     query = data.get("query", "").strip()
