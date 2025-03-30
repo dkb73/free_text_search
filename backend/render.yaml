@@ -4,8 +4,15 @@ services:
     env: python
     buildCommand: |
       pip install -r requirements.txt
+      echo "Current directory: $(pwd)"
+      echo "Listing contents of current directory:"
+      ls -la
+      echo "Creating data directory..."
       mkdir -p /opt/render/project/src/data
-      cp hostel_index.faiss hostel_ids.npy /opt/render/project/src/data/
+      echo "Copying files..."
+      cp -v hostel_index.faiss hostel_ids.npy /opt/render/project/src/data/
+      echo "Verifying files in data directory:"
+      ls -la /opt/render/project/src/data/
     startCommand: gunicorn app:app
     envVars:
       - key: GEMINI_API_KEY

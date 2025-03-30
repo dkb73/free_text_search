@@ -53,32 +53,53 @@ def load_index_files():
     try:
         # Get the absolute path to the current directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
+        logger.info(f"Current directory: {current_dir}")
         
         # Define possible locations for the files
         possible_locations = [
             current_dir,  # Current directory
             os.path.join(current_dir, 'data'),  # data subdirectory
             '/opt/render/project/src/data',  # Render's data directory
+            '/opt/render/project/src',  # Render's src directory
         ]
+        
+        # Log all possible locations
+        logger.info("Searching for files in the following locations:")
+        for location in possible_locations:
+            logger.info(f"- {location}")
+            if os.path.exists(location):
+                logger.info(f"  Directory exists: Yes")
+                files = os.listdir(location)
+                logger.info(f"  Files in directory: {files}")
+            else:
+                logger.info(f"  Directory exists: No")
         
         # Try each location until we find the files
         for location in possible_locations:
             index_path = os.path.join(location, "hostel_index.faiss")
             ids_path = os.path.join(location, "hostel_ids.npy")
             
-            logger.info(f"Attempting to load files from: {location}")
+            logger.info(f"\nAttempting to load files from: {location}")
+            logger.info(f"Index path: {index_path}")
+            logger.info(f"IDs path: {ids_path}")
             
             if os.path.exists(index_path) and os.path.exists(ids_path):
                 logger.info(f"Found files in: {location}")
+                logger.info(f"Index file size: {os.path.getsize(index_path)} bytes")
+                logger.info(f"IDs file size: {os.path.getsize(ids_path)} bytes")
+                
                 index = faiss.read_index(index_path)
                 hostel_ids = np.load(ids_path)
                 logger.info("FAISS index and hostel IDs loaded successfully")
                 return True
+            else:
+                logger.info("Files not found in this location")
                 
         logger.error("Could not find index files in any of the expected locations")
         return False
     except Exception as e:
         logger.error(f"Error loading FAISS index or hostel IDs: {e}")
+        logger.exception("Full traceback:")
         return False
 
 # Load the index files
