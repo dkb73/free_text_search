@@ -57,10 +57,9 @@ def load_index_files():
         
         # Define possible locations for the files
         possible_locations = [
+            '/data',  # Persistent disk location
             current_dir,  # Current directory
             os.path.join(current_dir, 'data'),  # data subdirectory
-            '/opt/render/project/src/data',  # Render's data directory
-            '/opt/render/project/src',  # Render's src directory
         ]
         
         # Log all possible locations

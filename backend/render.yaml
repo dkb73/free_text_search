@@ -20,4 +20,8 @@ services:
       - key: MONGODB_URI
         sync: false
       - key: FLASK_ENV
-        value: production 
+        value: production
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1 
